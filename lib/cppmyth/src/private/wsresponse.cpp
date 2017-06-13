@@ -328,7 +328,15 @@ int WSResponse::SocketStreamReader(void *hdl, void *buf, int sz)
   WSResponse *resp = static_cast<WSResponse*>(hdl);
   if (resp == NULL)
     return 0;
-  size_t s = resp->m_socket->ReceiveData(buf, sz);
+  size_t s = 0;
+  // let read on unknown length
+  if (!resp->m_contentLength)
+    s = resp->m_socket->ReceiveData(buf, sz);
+  else if (resp->m_contentLength > resp->m_consumed)
+  {
+    size_t len = resp->m_contentLength - resp->m_consumed;
+    s = resp->m_socket->ReceiveData(buf, len > (size_t)sz ? (size_t)sz : len);
+  }
   resp->m_consumed += s;
   return s;
 }
@@ -362,11 +370,13 @@ size_t WSResponse::ReadContent(char* buf, size_t buflen)
         m_decoder = new Decompressor(&SocketStreamReader, this);
       if (m_decoder->HasOutputData())
         s = m_decoder->ReadOutput(buf, buflen);
-      else if (!m_decoder->IsCompleted())
+      if (s == 0 && !m_decoder->IsCompleted())
       {
         if (m_decoder->HasStreamError())
-          DBG(DBG_ERROR, "%s: cannot read encoded stream\n", __FUNCTION__);
+          DBG(DBG_ERROR, "%s: decoding failed: stream error\n", __FUNCTION__);
         else if (m_decoder->HasBufferError())
+          DBG(DBG_ERROR, "%s: decoding failed: buffer error\n", __FUNCTION__);
+        else
           DBG(DBG_ERROR, "%s: decoding failed\n", __FUNCTION__);
       }
     }
@@ -377,17 +387,19 @@ size_t WSResponse::ReadContent(char* buf, size_t buflen)
     {
       s = ReadChunk(buf, buflen);
     }
-    else
+    else if (m_contentEncoding == CE_GZIP || m_contentEncoding == CE_DEFLATE)
     {
       if (m_decoder == NULL)
         m_decoder = new Decompressor(&ChunkStreamReader, this);
       if (m_decoder->HasOutputData())
         s = m_decoder->ReadOutput(buf, buflen);
-      else if (!m_decoder->IsCompleted())
+      if (s == 0 && !m_decoder->IsCompleted())
       {
         if (m_decoder->HasStreamError())
-          DBG(DBG_ERROR, "%s: cannot read encoded stream\n", __FUNCTION__);
+          DBG(DBG_ERROR, "%s: decoding failed: stream error\n", __FUNCTION__);
         else if (m_decoder->HasBufferError())
+          DBG(DBG_ERROR, "%s: decoding failed: buffer error\n", __FUNCTION__);
+        else
           DBG(DBG_ERROR, "%s: decoding failed\n", __FUNCTION__);
       }
     }

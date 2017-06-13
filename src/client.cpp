@@ -22,7 +22,6 @@
 
 #include "client.h"
 #include "pvrclient-mythtv.h"
-#include "guidialogyesno.h"
 
 #include <xbmc_pvr_dll.h>
 
@@ -61,7 +60,8 @@ bool          g_bUseAirdate             = DEFAULT_USE_AIRDATE;
 int           g_iEnableEDL              = ENABLE_EDL_ALWAYS;
 bool          g_bBlockMythShutdown      = DEFAULT_BLOCK_SHUTDOWN;
 bool          g_bLimitTuneAttempts      = DEFAULT_LIMIT_TUNE_ATTEMPTS;
-bool          g_bShowNotRecording       = false;
+bool          g_bShowNotRecording       = DEFAULT_SHOW_NOT_RECORDING;
+bool          g_bPromptDeleteAtEnd      = DEFAULT_PROMPT_DELETE;
 
 ///* Client member variables */
 ADDON_STATUS  m_CurStatus               = ADDON_STATUS_UNKNOWN;
@@ -75,7 +75,6 @@ PVRClientMythTV         *g_client       = NULL;
 CHelper_libXBMC_addon   *XBMC           = NULL;
 CHelper_libXBMC_pvr     *PVR            = NULL;
 CHelper_libKODI_guilib  *GUI            = NULL;
-CHelper_libXBMC_codec   *CODEC          = NULL;
 
 extern "C" {
 
@@ -97,7 +96,7 @@ ADDON_STATUS ADDON_Create(void *hdl, void *props)
     return ADDON_STATUS_PERMANENT_FAILURE;
   }
   XBMC->Log(LOG_DEBUG, "Creating MythTV PVR-Client");
-  XBMC->Log(LOG_DEBUG, "Addon compiled with XBMC_PVR_API_VERSION: %s and XBMC_PVR_MIN_API_VERSION: %s", GetPVRAPIVersion(), GetMininumPVRAPIVersion());
+  XBMC->Log(LOG_DEBUG, "Addon compiled with XBMC_PVR_API_VERSION: %s", INSTANCE_VERSION_PVR);
   XBMC->Log(LOG_DEBUG, "Register handle @ libXBMC_addon...done");
   XBMC->Log(LOG_DEBUG, "Checking props...");
   if (!props)
@@ -128,18 +127,6 @@ ADDON_STATUS ADDON_Create(void *hdl, void *props)
     return ADDON_STATUS_PERMANENT_FAILURE;
   }
   XBMC->Log(LOG_DEBUG, "Register handle @ libXBMC_gui...done");
-
-  XBMC->Log(LOG_DEBUG, "Register handle @ libXBMC_codec...");
-  CODEC = new CHelper_libXBMC_codec;
-  if (!CODEC->RegisterMe(hdl))
-  {
-    SAFE_DELETE(CODEC);
-    SAFE_DELETE(PVR);
-    SAFE_DELETE(XBMC);
-    SAFE_DELETE(GUI);
-    return ADDON_STATUS_PERMANENT_FAILURE;
-  }
-  XBMC->Log(LOG_DEBUG, "Register handle @ libXBMC_codec...done");
 
   m_CurStatus    = ADDON_STATUS_UNKNOWN;
   g_szUserPath   = pvrprops->strUserPath;
@@ -330,13 +317,21 @@ ADDON_STATUS ADDON_Create(void *hdl, void *props)
     g_bShowNotRecording = DEFAULT_SHOW_NOT_RECORDING;
   }
 
+  /* Read setting "use_airdate" from settings.xml */
+  if (!XBMC->GetSetting("prompt_delete", &g_bPromptDeleteAtEnd))
+  {
+    /* If setting is unknown fallback to defaults */
+    XBMC->Log(LOG_ERROR, "Couldn't get 'prompt_delete' setting, falling back to '%b' as default", DEFAULT_PROMPT_DELETE);
+    g_bPromptDeleteAtEnd = DEFAULT_PROMPT_DELETE;
+  }
+
   free (buffer);
   XBMC->Log(LOG_DEBUG, "Loading settings...done");
 
   // Create our addon
   XBMC->Log(LOG_DEBUG, "Creating MythTV client...");
   g_client = new PVRClientMythTV();
-  if (!g_client->Connect())
+  while (!g_client->Connect())
   {
     switch(g_client->GetConnectionError())
     {
@@ -347,12 +342,9 @@ ADDON_STATUS ADDON_Create(void *hdl, void *props)
         // Do you want to retry ?
         std::string msg = XBMC->GetLocalizedString(30300);
         msg.append("\n").append(XBMC->GetLocalizedString(30113));
-        GUIDialogYesNo dialog(XBMC->GetLocalizedString(30112), msg.c_str(), 1);
-        dialog.Open();
-        if (dialog.IsNo())
+        bool canceled = false;
+        if (!GUI->Dialog_YesNo_ShowAndGetInput(XBMC->GetLocalizedString(30112), msg.c_str(), canceled) && !canceled)
           m_CurStatus = ADDON_STATUS_PERMANENT_FAILURE;
-        else
-          m_CurStatus = ADDON_STATUS_NEED_SETTINGS;
         break;
       }
       case PVRClientMythTV::CONN_ERROR_API_UNAVAILABLE:
@@ -362,30 +354,40 @@ ADDON_STATUS ADDON_Create(void *hdl, void *props)
         // Do you want to retry ?
         std::string msg = XBMC->GetLocalizedString(30301);
         msg.append("\n").append(XBMC->GetLocalizedString(30113));
-        GUIDialogYesNo dialog(XBMC->GetLocalizedString(30112), msg.c_str(), 1);
-        dialog.Open();
-        if (dialog.IsNo())
+        bool canceled = false;
+        if (!GUI->Dialog_YesNo_ShowAndGetInput(XBMC->GetLocalizedString(30112), msg.c_str(), canceled) && !canceled)
           m_CurStatus = ADDON_STATUS_PERMANENT_FAILURE;
-        else
-          m_CurStatus = ADDON_STATUS_NEED_SETTINGS;
         break;
       }
       default:
-        if (g_bNotifyAddonFailure)
+      {
+        if (!g_bNotifyAddonFailure)
+          m_CurStatus = ADDON_STATUS_NEED_SETTINGS;
+        else
         {
-          XBMC->QueueNotification(QUEUE_ERROR, XBMC->GetLocalizedString(30304)); // No response from MythTV backend
-          g_bNotifyAddonFailure = false; // No more notification
+          // HEADING: Connection failed
+          // No response from MythTV backend.
+          // Do you want to retry ?
+          std::string msg = XBMC->GetLocalizedString(30304);
+          msg.append("\n").append(XBMC->GetLocalizedString(30113));
+          bool canceled = false;
+          if (!GUI->Dialog_YesNo_ShowAndGetInput(XBMC->GetLocalizedString(30112), msg.c_str(), canceled) && !canceled)
+            m_CurStatus = ADDON_STATUS_NEED_SETTINGS;
         }
-        m_CurStatus = ADDON_STATUS_NEED_SETTINGS;
+        break;
+      }
     }
-    SAFE_DELETE(g_client);
-    SAFE_DELETE(CODEC);
-    SAFE_DELETE(GUI);
-    SAFE_DELETE(PVR);
-    SAFE_DELETE(XBMC);
-    return m_CurStatus;
+    if (m_CurStatus == ADDON_STATUS_PERMANENT_FAILURE || m_CurStatus == ADDON_STATUS_NEED_SETTINGS)
+    {
+      SAFE_DELETE(g_client);
+      SAFE_DELETE(GUI);
+      SAFE_DELETE(PVR);
+      SAFE_DELETE(XBMC);
+      return m_CurStatus;
+    }
   }
   XBMC->Log(LOG_DEBUG, "Creating MythTV client...done");
+  PVR->ConnectionStateChange(g_client->GetBackendName(), PVR_CONNECTION_STATE_CONNECTED, g_client->GetBackendVersion());
 
   /* Read setting "LiveTV Priority" from backend database */
   bool savedLiveTVPriority;
@@ -449,7 +451,6 @@ void ADDON_Destroy()
   {
     g_bCreated = false;
     SAFE_DELETE(g_client);
-    SAFE_DELETE(CODEC);
     SAFE_DELETE(PVR);
     SAFE_DELETE(XBMC);
     SAFE_DELETE(GUI);
@@ -690,12 +691,13 @@ ADDON_STATUS ADDON_SetSetting(const char *settingName, const void *settingValue)
         g_client->HandleScheduleChange();
     }
   }
+  else if (str == "prompt_delete")
+  {
+    XBMC->Log(LOG_INFO, "Changed Setting 'prompt_delete' from %b to %b", g_bPromptDeleteAtEnd, *(bool*)settingValue);
+    if (g_bPromptDeleteAtEnd != *(bool*)settingValue)
+      g_bPromptDeleteAtEnd = *(bool*)settingValue;
+  }
   return ADDON_STATUS_OK;
-}
-
-void ADDON_Stop()
-{
-  //ADDON_Destroy();
 }
 
 void ADDON_FreeSettings()
@@ -703,45 +705,20 @@ void ADDON_FreeSettings()
   return;
 }
 
-ADDON_STATUS ADDON_CreateInstance(int instanceType, const char* instanceID, const void* instanceProps, void* instanceFunctions, void* kodiInstance, void** addonInstance)
+ADDON_STATUS ADDON_CreateInstance(int instanceType, const char* instanceID, KODI_HANDLE instance, KODI_HANDLE* addonInstance)
 {
   return ADDON_STATUS_UNKNOWN;
 }
 
-void ADDON_DestroyInstance(int instanceType, const char* instanceID, void* instance)
+void ADDON_DestroyInstance(int instanceType, KODI_HANDLE instance)
 {
 }
-
 
 /***********************************************************
  * PVR Client AddOn specific public library functions
  ***********************************************************/
 
-const char* GetPVRAPIVersion(void)
-{
-  static const char *strApiVersion = XBMC_PVR_API_VERSION;
-  return strApiVersion;
-}
-
-const char* GetMininumPVRAPIVersion(void)
-{
-  static const char *strMinApiVersion = XBMC_PVR_MIN_API_VERSION;
-  return strMinApiVersion;
-}
-
-const char* GetGUIAPIVersion(void)
-{
-  static const char *strGuiApiVersion = KODI_GUILIB_API_VERSION;
-  return strGuiApiVersion;
-}
-
-const char* GetMininumGUIAPIVersion(void)
-{
-  static const char *strMinGuiApiVersion = KODI_GUILIB_MIN_API_VERSION;
-  return strMinGuiApiVersion;
-}
-
-PVR_ERROR GetAddonCapabilities(PVR_ADDON_CAPABILITIES *pCapabilities)
+void GetCapabilities(PVR_ADDON_CAPABILITIES *pCapabilities)
 {
   if (g_client != NULL)
   {
@@ -761,11 +738,6 @@ PVR_ERROR GetAddonCapabilities(PVR_ADDON_CAPABILITIES *pCapabilities)
     pCapabilities->bSupportsRecordingPlayCount    = (version < 80 ? false : true);
     pCapabilities->bSupportsLastPlayedPosition    = (version < 88 ? false : true);
     pCapabilities->bSupportsRecordingEdl          = true;
-    return PVR_ERROR_NO_ERROR;
-  }
-  else
-  {
-    return PVR_ERROR_FAILED;
   }
 }
 

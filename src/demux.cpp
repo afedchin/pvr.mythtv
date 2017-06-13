@@ -22,7 +22,6 @@
 
 #include <p8-platform/os.h>
 #include <libXBMC_pvr.h>
-#include <xbmc_codec_types.h>
 
 #include "demux.h"
 #include "demuxer/debug.h"
@@ -424,7 +423,7 @@ void Demux::populate_pvr_streams()
   for (std::vector<TSDemux::ElementaryStream*>::const_iterator it = es_streams.begin(); it != es_streams.end(); it++)
   {
     const char* codec_name = (*it)->GetStreamCodecName();
-    xbmc_codec_t codec = CODEC->GetCodecByName(codec_name);
+    xbmc_codec_t codec = PVR->GetCodecByName(codec_name);
     if (codec.codec_type != XBMC_CODEC_TYPE_UNKNOWN)
     {
       memset(&m_streams.stream[count], 0, sizeof(PVR_STREAM_PROPERTIES::PVR_STREAM));
@@ -482,7 +481,7 @@ bool Demux::update_pvr_stream(uint16_t pid)
     return false;
 
   const char* codec_name = es->GetStreamCodecName();
-  xbmc_codec_t codec = CODEC->GetCodecByName(codec_name);
+  xbmc_codec_t codec = PVR->GetCodecByName(codec_name);
   if (g_bExtraDebug)
     XBMC->Log(LOG_DEBUG, LOGTAG "%s: update info PES %.4x %s", __FUNCTION__, es->pid, codec_name);
 

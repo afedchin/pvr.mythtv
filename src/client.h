@@ -28,7 +28,6 @@
 #include <libXBMC_addon.h>
 #include <libXBMC_pvr.h>
 #include <libKODI_guilib.h>
-#include <libXBMC_codec.h>
 
 #define LIVETV_CONFLICT_STRATEGY_HASLATER   0
 #define LIVETV_CONFLICT_STRATEGY_STOPTV     1
@@ -65,6 +64,7 @@
 #define DEFAULT_BLOCK_SHUTDOWN              true
 #define DEFAULT_LIMIT_TUNE_ATTEMPTS         true
 #define DEFAULT_SHOW_NOT_RECORDING          true
+#define DEFAULT_PROMPT_DELETE               false
 
 /*!
  * @brief PVR macros for string exchange
@@ -115,10 +115,10 @@ extern int          g_iEnableEDL;
 extern bool         g_bBlockMythShutdown;
 extern bool         g_bLimitTuneAttempts;       ///< Limit channel tuning attempts to first card
 extern bool         g_bShowNotRecording;
+extern bool         g_bPromptDeleteAtEnd;
 
 extern ADDON::CHelper_libXBMC_addon *XBMC;
 extern CHelper_libXBMC_pvr          *PVR;
 extern CHelper_libKODI_guilib       *GUI;
-extern CHelper_libXBMC_codec        *CODEC;
 
 #endif /* CLIENT_H */

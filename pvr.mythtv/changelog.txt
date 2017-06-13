@@ -1,3 +1,22 @@
+v5.0.7
+- Sync upstream cppmyth (2.9.2)
+
+v5.0.5
+- Fill flag 'has bookmark' on recordings
+
+v5.0.4
+- Replaced custom Dialog class with standard Kodi API call
+- Upgrade the demuxer to support hevc stream
+- Add a dialog to retry connect the backend on startup
+- An option to prompt to delete a recording after finishing it
+- Adding new section 'Preferences' in settings
+
+v5.0.2
+- Sync cppmyth upstream (2.9.1)
+
+v5.0.1
+- Sync cppmyth upstream: fix reader of encoded content
+
 v5.0.0
 - Initial Kodi v18 version
 
