@@ -52,7 +52,6 @@
 #define MENUHOOK_REFRESH_CHANNEL_ICONS      5
 #define MENUHOOK_TRIGGER_CHANNEL_UPDATE     6
 
-#define DEFAULT_HANDLE_DEMUXING             false
 #define DEFAULT_TUNE_DELAY                  5
 #define GROUP_RECORDINGS_ALWAYS             0
 #define GROUP_RECORDINGS_ONLY_FOR_SERIES    1
@@ -65,6 +64,7 @@
 #define DEFAULT_LIMIT_TUNE_ATTEMPTS         true
 #define DEFAULT_SHOW_NOT_RECORDING          true
 #define DEFAULT_PROMPT_DELETE               false
+#define DEFAULT_LIVETV_RECORDINGS           true
 
 /*!
  * @brief PVR macros for string exchange
@@ -94,6 +94,7 @@ extern bool         g_bLiveTVPriority;          ///< MythTV Backend setting to a
 extern int          g_iLiveTVConflictStrategy;  ///< Live TV conflict resolving strategy (0=Has later, 1=Stop TV, 2=Cancel recording)
 extern bool         g_bChannelIcons;            ///< Load Channel Icons
 extern bool         g_bRecordingIcons;          ///< Load Recording Icons (Fanart/Thumbnails)
+extern bool         g_bLiveTVRecordings;        ///< Show LiveTV recordings
 extern int          g_iRecTemplateType;         ///< Template type for new record (0=Internal, 1=MythTV)
 ///@{
 /// Internal Record template
@@ -107,7 +108,6 @@ extern bool         g_bRecAutoRunJob4;
 extern bool         g_bRecAutoExpire;
 extern int          g_iRecTranscoder;
 ///@}
-extern bool         g_bDemuxing;
 extern int          g_iTuneDelay;
 extern int          g_iGroupRecordings;
 extern bool         g_bUseAirdate;
